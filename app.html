@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的工作台帐</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<script src="js/supabaseClient.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>我的工作台帐</h1>
+      <div class="role">ADMIN · ACCOUNTS · HR — 事项追踪</div>
+    </div>
+    <div class="header-right">
+      <div class="today" id="todayBox"></div>
+      <button id="roleBadge" class="role-badge"></button>
+      <button id="logoutBtn" class="share-btn">登出</button>
+    </div>
+  </header>
+
+  <div id="saveErrorBox"></div>
+  <div id="reminderBox"></div>
+  <nav class="tabs" id="tabsNav"></nav>
+  <section class="panel" id="panelBox"></section>
+
+  <footer>数据保存在 Supabase · 每月固定事项会在新的一个月自动重置</footer>
+</div>
+
+<script src="js/state.js"></script>
+<script src="js/board.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
