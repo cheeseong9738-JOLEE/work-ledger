@@ -12,6 +12,7 @@
   --focus:#3B5A45;
   --slate:#5C6B4F;
   --plum:#7C5CA8;
+  --rust:#8B5A3C;
 }
 *{box-sizing:border-box;}
 body{
@@ -368,6 +369,7 @@ li.row.done .title{
   color:#fff;
   letter-spacing:0.2px;
 }
+.tag-daily{background:var(--rust);}
 .tag-monthly{background:var(--gold);}
 .tag-weekly{background:var(--slate);}
 .tag-yearly{background:var(--plum);}
@@ -629,6 +631,7 @@ ul.steps-list{
   margin-bottom:1px;
   border-radius:3px;
 }
+.cal-item.type-daily{border-left:3px solid var(--rust);}
 .cal-item.type-monthly{border-left:3px solid var(--gold);}
 .cal-item.type-weekly{border-left:3px solid var(--slate);}
 .cal-item.type-yearly{border-left:3px solid var(--plum);}
@@ -656,6 +659,7 @@ ul.steps-list{
   border-radius:50%;
   flex:none;
 }
+.cal-dot.daily{background:var(--rust);}
 .cal-dot.monthly{background:var(--gold);}
 .cal-dot.weekly{background:var(--slate);}
 .cal-dot.yearly{background:var(--plum);}

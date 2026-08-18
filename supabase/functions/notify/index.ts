@@ -48,6 +48,14 @@ function daysUntil(dateStr: string): number {
   const target = new Date(dateStr + 'T00:00:00Z');
   return Math.round((target.getTime() - today.getTime()) / (1000*60*60*24));
 }
+function nowHM(): string {
+  const d = nowMYT();
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+function timeToMinutes(t: string): number {
+  const [h,m] = t.split(':').map((n:string)=>parseInt(n,10));
+  return h*60+m;
+}
 function isYearlyActiveThisYear(item: any, year: number){
   const interval = item.intervalYears || 1;
   const anchor = item.anchorYear || year;
@@ -57,7 +65,8 @@ function isYearlyActiveThisYear(item: any, year: number){
 
 function computeDone(state: any, type: string, item: any, periodKey: string): boolean {
   const steps = item.steps || [];
-  const doneMapRoot = type==='monthly' ? state.monthlyStepsDone
+  const doneMapRoot = type==='daily' ? state.dailyStepsDone
+    : type==='monthly' ? state.monthlyStepsDone
     : type==='weekly' ? state.weeklyStepsDone
     : type==='yearly' ? state.yearlyStepsDone
     : null;
@@ -66,13 +75,14 @@ function computeDone(state: any, type: string, item: any, periodKey: string): bo
     const doneMap = (doneMapRoot[periodKey]||{})[item.id] || {};
     return steps.every((s: any)=>doneMap[s.id]);
   }
+  if(type==='daily') return !!(state.dailyDone[periodKey]||{})[item.id];
   if(type==='monthly') return !!(state.monthlyDone[periodKey]||{})[item.id];
   if(type==='weekly') return !!(state.weeklyDone[periodKey]||{})[item.id];
   if(type==='yearly') return !!(state.yearlyDone[periodKey]||{})[item.id];
   return !!item.done;
 }
 
-type DueItem = { title: string; typeLabel: string; dleft: number };
+type DueItem = { title: string; typeLabel: string; dleft: number; customNote?: string };
 
 function collectDue(state: any): { overdue: DueItem[]; soon: DueItem[] } {
   const overdue: DueItem[] = [];
@@ -85,6 +95,18 @@ function collectDue(state: any): { overdue: DueItem[]; soon: DueItem[] } {
     if(dleft < 0) overdue.push({title, typeLabel, dleft});
     else soon.push({title, typeLabel, dleft});
   }
+
+  (state.daily||[]).forEach((it: any)=>{
+    const dk = todayISO();
+    if(computeDone(state, 'daily', it, dk)) return;
+    const mins = timeToMinutes(it.time) - timeToMinutes(nowHM());
+    if(mins > 60) return;
+    if(mins <= 0){
+      overdue.push({title: it.title, typeLabel: '每天固定', dleft: -1, customNote: `已过 ${it.time}`});
+    } else {
+      soon.push({title: it.title, typeLabel: '每天固定', dleft: 0, customNote: `还有 ${mins} 分钟(${it.time} 前)`});
+    }
+  });
 
   (state.monthly||[]).forEach((it: any)=>{
     if(computeDone(state, 'monthly', it, monthKey())) return;
@@ -145,12 +167,12 @@ function buildMessage(state: any): string {
   if(overdue.length>0){
     lines.push('');
     lines.push('⚠️ 已逾期:');
-    overdue.forEach(it=> lines.push(`· [${it.typeLabel}] ${it.title}(逾期 ${-it.dleft} 天)`));
+    overdue.forEach(it=> lines.push(`· [${it.typeLabel}] ${it.title}(${it.customNote || `逾期 ${-it.dleft} 天`})`));
   }
   if(soon.length>0){
     lines.push('');
-    lines.push('🔔 即将到期(3天内):');
-    soon.forEach(it=> lines.push(`· [${it.typeLabel}] ${it.title}(${it.dleft===0?'今天':`还有 ${it.dleft} 天`})`));
+    lines.push('🔔 即将到期:');
+    soon.forEach(it=> lines.push(`· [${it.typeLabel}] ${it.title}(${it.customNote || (it.dleft===0?'今天':`还有 ${it.dleft} 天`)})`));
   }
   if(unresolvedMistakes.length>0){
     lines.push('');

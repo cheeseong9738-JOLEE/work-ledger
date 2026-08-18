@@ -23,11 +23,31 @@ function escapeHtml(str){
 }
 
 function listByType(type){
+  if(type==='daily') return state.daily;
   if(type==='monthly') return state.monthly;
   if(type==='weekly') return state.weekly;
   if(type==='yearly') return state.yearly;
   if(type==='dated') return state.dated;
   return state.adhoc;
+}
+
+function formatTime12(t){
+  if(!t) return '';
+  const [hStr, mStr] = t.split(':');
+  let h = parseInt(hStr,10);
+  const ap = h>=12 ? 'PM' : 'AM';
+  h = h % 12; if(h===0) h = 12;
+  return `${h}:${mStr}${ap}`;
+}
+
+function timeToMinutes(t){
+  const [h,m] = t.split(':').map(n=>parseInt(n,10));
+  return h*60+m;
+}
+
+function minutesUntilTime(t){
+  const now = new Date();
+  return timeToMinutes(t) - (now.getHours()*60 + now.getMinutes());
 }
 
 function getNote(type,id){
@@ -50,6 +70,12 @@ function getLinkedMistakes(type,id){
 }
 
 function getStepsDoneMap(type, item, weekOverride){
+  if(type==='daily'){
+    const dk = weekOverride || todayISO();
+    if(!state.dailyStepsDone[dk]) state.dailyStepsDone[dk] = {};
+    if(!state.dailyStepsDone[dk][item.id]) state.dailyStepsDone[dk][item.id] = {};
+    return state.dailyStepsDone[dk][item.id];
+  }
   if(type==='monthly'){
     const mk = monthKey();
     if(!state.monthlyStepsDone[mk]) state.monthlyStepsDone[mk] = {};
@@ -90,11 +116,13 @@ function computeDoneForKey(type, item, key){
   const steps = item.steps || [];
   if(steps.length > 0){
     let doneMap = {};
-    if(type==='monthly') doneMap = (state.monthlyStepsDone[key]||{})[item.id] || {};
+    if(type==='daily') doneMap = (state.dailyStepsDone[key]||{})[item.id] || {};
+    else if(type==='monthly') doneMap = (state.monthlyStepsDone[key]||{})[item.id] || {};
     else if(type==='weekly') doneMap = (state.weeklyStepsDone[key]||{})[item.id] || {};
     else if(type==='yearly') doneMap = (state.yearlyStepsDone[key]||{})[item.id] || {};
     return steps.every(s=>doneMap[s.id]);
   }
+  if(type==='daily') return !!(state.dailyDone[key]||{})[item.id];
   if(type==='monthly') return !!(state.monthlyDone[key]||{})[item.id];
   if(type==='weekly') return !!(state.weeklyDone[key]||{})[item.id];
   if(type==='yearly') return !!(state.yearlyDone[key]||{})[item.id];
@@ -106,6 +134,10 @@ function computeDone(type, item, weekOverride){
   if(steps.length > 0){
     const doneMap = getStepsDoneMap(type, item, weekOverride);
     return steps.every(s => doneMap[s.id]);
+  }
+  if(type==='daily'){
+    const dk = weekOverride || todayISO();
+    return !!(state.dailyDone[dk]||{})[item.id];
   }
   if(type==='monthly'){
     const mk = monthKey();
@@ -145,6 +177,8 @@ function renderStamp(type, item, manualDone, weekOverride){
   let label = '';
   if(manualDone){
     label = '已办';
+  } else if(type==='daily'){
+    label = '每天<br>'+formatTime12(item.time);
   } else if(type==='monthly'){
     label = '每月<br>'+item.day+'号';
   } else if(type==='weekly'){
@@ -200,6 +234,7 @@ function renderStepsBlock(type, item, allowEdit, weekOverride){
 
 function buildLinkOptions(){
   const opts = [];
+  state.daily.forEach(it=> opts.push({type:'daily', id:it.id, label:`[每天固定] ${it.title}`}));
   state.monthly.forEach(it=> opts.push({type:'monthly', id:it.id, label:`[每月固定] ${it.title}`}));
   state.weekly.forEach(it=> opts.push({type:'weekly', id:it.id, label:`[每周固定] ${it.title}`}));
   state.yearly.forEach(it=> opts.push({type:'yearly', id:it.id, label:`[每年固定] ${it.title}`}));
@@ -241,6 +276,9 @@ function daysUntil(dateStr){
 
 function countUrgentPending(type){
   const now = new Date();
+  if(type==='daily'){
+    return state.daily.filter(it=> !computeDone('daily', it) && minutesUntilTime(it.time) <= 60).length;
+  }
   if(type==='monthly'){
     return state.monthly.filter(it=>{
       if(computeDone('monthly', it)) return false;
@@ -277,12 +315,15 @@ function countUrgentPending(type){
 }
 
 function updateTabTitle(){
-  const total = ['monthly','weekly','yearly','dated','adhoc'].reduce((sum,t)=>sum+countUrgentPending(t), 0);
+  const total = ['daily','monthly','weekly','yearly','dated','adhoc'].reduce((sum,t)=>sum+countUrgentPending(t), 0);
   document.title = total > 0 ? `⚠️${total} 我的工作台帐` : '我的工作台帐';
 }
 
 function hasUrgentPending(type){
   const now = new Date();
+  if(type==='daily'){
+    return state.daily.some(it=> !computeDone('daily', it) && minutesUntilTime(it.time) <= 60);
+  }
   if(type==='monthly'){
     return state.monthly.some(it=>{
       if(computeDone('monthly', it)) return false;
@@ -316,12 +357,13 @@ function hasUrgentPending(type){
     return state.adhoc.some(it=> !computeDone('adhoc', it) && daysUntil(it.deadline) <= 3);
   }
   if(type==='overview'){
-    return ['monthly','weekly','yearly','dated','adhoc'].some(t=>hasUrgentPending(t));
+    return ['daily','monthly','weekly','yearly','dated','adhoc'].some(t=>hasUrgentPending(t));
   }
   return false;
 }
 
 function renderTabs(){
+  const dailyPending = state.daily.filter(it => !computeDone('daily', it)).length;
   const monthlyPending = state.monthly.filter(it => !computeDone('monthly', it)).length;
   const weeklyPending = state.weekly.filter(it => !computeDone('weekly', it)).length;
   const yearlyPending = state.yearly.filter(it => isYearlyActiveThisYear(it, new Date().getFullYear()) && !computeDone('yearly', it)).length;
@@ -339,7 +381,8 @@ function renderTabs(){
     }
   });
 
-  const overviewPending = monthlyPending
+  const overviewPending = dailyPending
+    + monthlyPending
     + weeklyOccPending
     + state.dated.filter(it=>!computeDone('dated',it) && isInCurrentMonth(it.date)).length
     + state.adhoc.filter(it=>!computeDone('adhoc',it) && isInCurrentMonth(it.deadline)).length
@@ -348,8 +391,9 @@ function renderTabs(){
   const tabs = [
     {key:'calendar', label:'日历', cnt:null},
     {key:'overview', label:'本月总览', cnt:overviewPending, urgent:hasUrgentPending('overview')},
-    {key:'monthly', label:'每月固定', cnt:monthlyPending, urgent:hasUrgentPending('monthly')},
+    {key:'daily', label:'每天固定', cnt:dailyPending, urgent:hasUrgentPending('daily')},
     {key:'weekly', label:'每周固定', cnt:weeklyPending, urgent:hasUrgentPending('weekly')},
+    {key:'monthly', label:'每月固定', cnt:monthlyPending, urgent:hasUrgentPending('monthly')},
     {key:'yearly', label:'每年固定', cnt:yearlyPending, urgent:hasUrgentPending('yearly')},
     {key:'dated', label:'特定日期', cnt:datedPending, urgent:hasUrgentPending('dated')},
     {key:'adhoc', label:'老板临时交办', cnt:adhocPending, urgent:hasUrgentPending('adhoc')},
@@ -395,8 +439,14 @@ let historyViewMonth = null;
 function renderHistoryPanel(){
   const monthKeys = Object.keys(state.monthlyDone).sort();
   const currentMk = monthKey();
-  if(monthKeys.length===0 && !state.monthlyDone[currentMk]){
-    return `<div class="empty">还没有历史记录。当你在「每月固定」打勾之后,记录会自动保存在这里,月份过去也不会消失,可以随时回来查。</div>`;
+  const hasAnyHistory = monthKeys.length > 0
+    || Object.keys(state.dailyDone||{}).length > 0
+    || Object.keys(state.weeklyDone||{}).length > 0
+    || Object.keys(state.yearlyDone||{}).length > 0
+    || state.dated.some(it=>it.done)
+    || state.adhoc.some(it=>it.done);
+  if(!hasAnyHistory){
+    return `<div class="empty">还没有历史记录。当你在任何一个分类打勾之后,记录会自动保存在这里,月份过去也不会消失,可以随时回来查。</div>`;
   }
   if(!monthKeys.includes(currentMk)) monthKeys.push(currentMk);
   monthKeys.sort();
@@ -414,10 +464,24 @@ function renderHistoryPanel(){
   const [y,m] = selectedMk.split('-');
   const selYear = parseInt(y,10), selMonth = parseInt(m,10);
 
-  const typeLabel = {monthly:'每月固定', weekly:'每周固定', yearly:'每年固定', dated:'特定日期', adhoc:'老板交办', note:'备注事项'};
-  const typeClass = {monthly:'tag-monthly', weekly:'tag-weekly', yearly:'tag-yearly', dated:'tag-dated', adhoc:'tag-adhoc', note:'tag-note'};
+  const typeLabel = {daily:'每天固定', monthly:'每月固定', weekly:'每周固定', yearly:'每年固定', dated:'特定日期', adhoc:'老板交办', note:'备注事项'};
+  const typeClass = {daily:'tag-daily', monthly:'tag-monthly', weekly:'tag-weekly', yearly:'tag-yearly', dated:'tag-dated', adhoc:'tag-adhoc', note:'tag-note'};
 
   const rows = [];
+
+  const daysInSelMonthForDaily = new Date(selYear, selMonth, 0).getDate();
+  state.daily.forEach(it=>{
+    for(let day=1; day<=daysInSelMonthForDaily; day++){
+      const dISO = `${selYear}-${pad(selMonth)}-${pad(day)}`;
+      rows.push({
+        day,
+        title: it.title,
+        type: 'daily',
+        done: computeDoneForKey('daily', it, dISO),
+        dateStr: (state.dailyDoneDates[dISO]||{})[it.id]
+      });
+    }
+  });
 
   state.monthly.forEach(it=>{
     rows.push({
@@ -614,11 +678,26 @@ function classifyCalItem(done, iso){
   return 'normal';
 }
 
+function classifyDailyCalItem(done, iso, time){
+  if(done) return 'done';
+  const todayIso = todayISO();
+  if(iso < todayIso) return 'overdue';
+  if(iso > todayIso) return 'normal';
+  const mins = minutesUntilTime(time);
+  if(mins <= 0) return 'overdue';
+  if(mins <= 60) return 'soon';
+  return 'normal';
+}
+
 function getItemsForDate(d){
   const dayNum = d.getDate();
   const iso = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   const wd = isoWeekday(d);
   const list = [];
+  state.daily.forEach(it=>{
+    const done = computeDone('daily', it, iso);
+    list.push({type:'daily', id:it.id, title:it.title, done, weekKey:iso, cls:classifyDailyCalItem(done,iso,it.time)});
+  });
   state.monthly.forEach(it=>{
     if(it.day===dayNum){
       const done = computeDone('monthly',it);
@@ -682,12 +761,13 @@ function renderCalendarPanel(){
   }
 
   return `
-    <div class="hint">${year} 年 ${month+1} 月 — 每月固定、每周固定、特定日期、老板交办全部显示在对应的日子。${canEdit() ? '点一下项目可以标记完成(有步骤清单的事项,请到对应分页里逐步勾选)。' : ''}</div>
+    <div class="hint">${year} 年 ${month+1} 月 — 每天固定、每月固定、每周固定、特定日期、老板交办全部显示在对应的日子。${canEdit() ? '点一下项目可以标记完成(有步骤清单的事项,请到对应分页里逐步勾选)。' : ''}</div>
     <div class="cal-grid">
       ${weekdayHeaders.map(w=>`<div class="cal-weekday-header">${w}</div>`).join('')}
       ${cellsHtml}
     </div>
     <div class="cal-legend">
+      <span><span class="cal-dot daily"></span>每天固定</span>
       <span><span class="cal-dot monthly"></span>每月固定</span>
       <span><span class="cal-dot weekly"></span>每周固定</span>
       <span><span class="cal-dot yearly"></span>每年固定</span>
@@ -703,6 +783,24 @@ function renderOverviewPanel(){
   const todayDate = new Date().getDate();
 
   const items = [];
+
+  const todayNum = new Date().getDate();
+  state.daily.forEach(it=>{
+    const done = computeDone('daily', it);
+    const mins = minutesUntilTime(it.time);
+    items.push({
+      day: todayNum,
+      dateLabel: formatTime12(it.time),
+      title: it.title,
+      done,
+      type:'daily',
+      id: it.id,
+      note: it.note,
+      steps: it.steps,
+      overdue: !done && mins <= 0,
+      soon: !done && mins > 0 && mins <= 60
+    });
+  });
 
   state.monthly.forEach(it=>{
     const done = computeDone('monthly', it);
@@ -801,8 +899,8 @@ function renderOverviewPanel(){
 
   items.sort((a,b)=>a.day-b.day);
 
-  const typeLabel = {monthly:'每月固定', weekly:'每周固定', yearly:'每年固定', dated:'特定日期', adhoc:'老板交办'};
-  const typeClass = {monthly:'tag-monthly', weekly:'tag-weekly', yearly:'tag-yearly', dated:'tag-dated', adhoc:'tag-adhoc'};
+  const typeLabel = {daily:'每天固定', monthly:'每月固定', weekly:'每周固定', yearly:'每年固定', dated:'特定日期', adhoc:'老板交办'};
+  const typeClass = {daily:'tag-daily', monthly:'tag-monthly', weekly:'tag-weekly', yearly:'tag-yearly', dated:'tag-dated', adhoc:'tag-adhoc'};
 
   const pendingItems = items.filter(it=>!it.done);
 
@@ -816,7 +914,7 @@ function renderOverviewPanel(){
       <li class="row ${it.overdue?'overdue':''} ${it.soon?'soon':''}">
         <div class="row-main">
           ${renderStampOverview(it)}
-          <div class="datebadge">${it.day}号</div>
+          <div class="datebadge">${it.dateLabel || (it.day+'号')}</div>
           <span class="tag ${typeClass[it.type]}">${typeLabel[it.type]}</span>
           <div class="title" style="cursor:default;">${it.title}</div>
         </div>
@@ -828,8 +926,48 @@ function renderOverviewPanel(){
 
   const d = new Date();
   return `
-    <div class="hint month-title">${d.getFullYear()} 年 ${d.getMonth()+1} 月总览 — 每月固定/每周固定/特定日期/老板交办合并,按日期排序。做完打勾后会移去「历史记录」,不留在这里。</div>
+    <div class="hint month-title">${d.getFullYear()} 年 ${d.getMonth()+1} 月总览 — 每天固定(今天的)/每月固定/每周固定/特定日期/老板交办合并,按日期排序。做完打勾后会移去「历史记录」,不留在这里。</div>
     ${rowsHtml}
+  `;
+}
+
+function renderDailyPanel(){
+  const sorted = [...state.daily].filter(it=>!computeDone('daily', it)).sort((a,b)=> (a.time||'').localeCompare(b.time||''));
+  const totalCount = state.daily.length;
+
+  let rowsHtml = '';
+  if(totalCount===0){
+    rowsHtml = `<div class="empty">还没有每天固定事项${canEdit() ? ',在下面添加一个吧' : ''}</div>`;
+  } else if(sorted.length===0){
+    rowsHtml = `<div class="empty">今天的都做完了!到「历史记录」可以回顾,明天自动重置。</div>`;
+  } else {
+    rowsHtml = '<ul class="rows">' + sorted.map(it=>{
+      const mins = minutesUntilTime(it.time);
+      const overdue = mins <= 0;
+      const soon = !overdue && mins <= 60;
+      return `
+      <li class="row ${overdue?'overdue':''} ${soon?'soon':''}" data-id="${it.id}">
+        <div class="row-main">
+          ${renderStamp('daily', it, false)}
+          <div class="datebadge">${formatTime12(it.time)}</div>
+          <input class="title" data-action="edit-daily" data-id="${it.id}" value="${it.title.replace(/"/g,'&quot;')}" ${canEdit()?'':'readonly'}>
+          ${canEdit() ? `<button class="icon-btn" data-action="del-daily" data-id="${it.id}" aria-label="删除">✕</button>` : ''}
+        </div>
+        ${renderNoteLine('daily', it.id, it.note)}
+        ${renderStepsBlock('daily', it, true)}
+      </li>`;
+    }).join('') + '</ul>';
+  }
+
+  return `
+    <div class="hint">每天都要做的事,填几点前要做好,比如开店检查、每天结账。超过那个时间还没打勾会标红。做完打勾后会移去「历史记录」,不会留在这里;明天自动重置再出现。</div>
+    ${rowsHtml}
+    ${canEdit() ? `
+    <div class="add-row">
+      <input class="date" type="time" id="newDailyTime" style="width:120px;">
+      <input class="text" type="text" id="newDailyTitle" placeholder="事项内容,例如:开店前检查">
+      <button id="addDailyBtn">加入</button>
+    </div>` : ''}
   `;
 }
 
@@ -1097,6 +1235,7 @@ function render(){
   const panel = document.getElementById('panelBox');
   if(activeTab==='overview') panel.innerHTML = renderOverviewPanel();
   else if(activeTab==='calendar') panel.innerHTML = renderCalendarPanel();
+  else if(activeTab==='daily') panel.innerHTML = renderDailyPanel();
   else if(activeTab==='monthly') panel.innerHTML = renderMonthlyPanel();
   else if(activeTab==='weekly') panel.innerHTML = renderWeeklyPanel();
   else if(activeTab==='yearly') panel.innerHTML = renderYearlyPanel();
@@ -1128,7 +1267,12 @@ function attachPanelEvents(){
       const item = listByType(type).find(x=>x.id===id);
       if(!item) return;
       if((item.steps||[]).length > 0) return;
-      if(type==='monthly'){
+      if(type==='daily'){
+        const dk = el.dataset.week || todayISO();
+        if(!state.dailyDone[dk]) state.dailyDone[dk]={};
+        state.dailyDone[dk][id] = !state.dailyDone[dk][id];
+        recordDoneDate('dailyDoneDates', dk, id, state.dailyDone[dk][id]);
+      } else if(type==='monthly'){
         const mk = monthKey();
         if(!state.monthlyDone[mk]) state.monthlyDone[mk]={};
         state.monthlyDone[mk][id] = !state.monthlyDone[mk][id];
@@ -1272,7 +1416,12 @@ function attachPanelEvents(){
       if(!canEdit()) return;
       const type = b.dataset.type;
       const id = b.dataset.id;
-      if(type==='monthly'){
+      if(type==='daily'){
+        const dk = todayISO();
+        if(!state.dailyDone[dk]) state.dailyDone[dk]={};
+        state.dailyDone[dk][id] = !state.dailyDone[dk][id];
+        recordDoneDate('dailyDoneDates', dk, id, state.dailyDone[dk][id]);
+      } else if(type==='monthly'){
         const mk = monthKey();
         if(!state.monthlyDone[mk]) state.monthlyDone[mk]={};
         state.monthlyDone[mk][id] = !state.monthlyDone[mk][id];
@@ -1298,6 +1447,32 @@ function attachPanelEvents(){
         if(it) it.done = !it.done;
       }
       saveState(); render();
+    });
+  });
+
+  panel.querySelectorAll('[data-action="toggle-daily"]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if(!canEdit()) return;
+      const dk = todayISO();
+      if(!state.dailyDone[dk]) state.dailyDone[dk]={};
+      const id = b.dataset.id;
+      state.dailyDone[dk][id] = !state.dailyDone[dk][id];
+      recordDoneDate('dailyDoneDates', dk, id, state.dailyDone[dk][id]);
+      saveState(); render();
+    });
+  });
+  panel.querySelectorAll('[data-action="del-daily"]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if(!canEdit()) return;
+      state.daily = state.daily.filter(it=>it.id!==b.dataset.id);
+      saveState(); render();
+    });
+  });
+  panel.querySelectorAll('[data-action="edit-daily"]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      if(!canEdit()) return;
+      const it = state.daily.find(x=>x.id===inp.dataset.id);
+      if(it){ it.title = inp.value; saveState(); }
     });
   });
 
@@ -1425,6 +1600,20 @@ function attachPanelEvents(){
       if(it){ it.title = inp.value; saveState(); }
     });
   });
+
+  const addDailyBtn = document.getElementById('addDailyBtn');
+  if(addDailyBtn){
+    addDailyBtn.addEventListener('click', ()=>{
+      if(!canEdit()) return;
+      const timeInp = document.getElementById('newDailyTime');
+      const titleInp = document.getElementById('newDailyTitle');
+      const time = timeInp.value;
+      const title = titleInp.value.trim();
+      if(!time || !title) return;
+      state.daily.push({id:uid(), time, title});
+      saveState(); render();
+    });
+  }
 
   const addMonthlyBtn = document.getElementById('addMonthlyBtn');
   if(addMonthlyBtn){

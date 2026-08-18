@@ -33,6 +33,10 @@ function uid(){ return Math.random().toString(36).slice(2,9); }
 
 // 整个系统只有这一行数据(board_state 表,id 固定为 1),内容是这个 JSON 结构:
 let state = {
+  daily: [],
+  dailyDone: {},
+  dailyDoneDates: {},
+  dailyStepsDone: {},
   monthly: [],
   monthlyDone: {},
   monthlyDoneDates: {},
@@ -54,6 +58,10 @@ let state = {
 const BOARD_ROW_ID = 1;
 
 function ensureStateShape(){
+  if(!state.daily) state.daily = [];
+  if(!state.dailyDone) state.dailyDone = {};
+  if(!state.dailyDoneDates) state.dailyDoneDates = {};
+  if(!state.dailyStepsDone) state.dailyStepsDone = {};
   if(!state.monthly) state.monthly = [];
   if(!state.monthlyDone) state.monthlyDone = {};
   if(!state.monthlyDoneDates) state.monthlyDoneDates = {};
