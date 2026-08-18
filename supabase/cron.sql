@@ -1,4 +1,4 @@
--- 排程:每天马来西亚时间早上 8 点(= UTC 0 点)呼叫 notify Edge Function,推播 Telegram 消息。
+-- 排程:每天马来西亚时间中午 12 点(= UTC 4 点)呼叫 notify Edge Function,推播 Telegram 消息。
 -- 部署 Edge Function 时要加 --no-verify-jwt(見 README),这样这里不用带任何认证 header 也能呼叫成功:
 --   supabase functions deploy notify --no-verify-jwt
 --
@@ -13,7 +13,7 @@ create extension if not exists pg_net with schema extensions;
 --    也就是你的 Project URL https://<YOUR_PROJECT_REF>.supabase.co 中间那一段)
 select cron.schedule(
   'daily-telegram-notify',        -- 排程名字,之后要改/删都是用这个名字
-  '0 0 * * *',                    -- 每天 UTC 0 点 = 马来西亚时间早上 8 点
+  '0 4 * * *',                    -- 每天 UTC 4 点 = 马来西亚时间中午 12 点
   $$
   select net.http_post(
     url := 'https://<YOUR_PROJECT_REF>.supabase.co/functions/v1/notify',
