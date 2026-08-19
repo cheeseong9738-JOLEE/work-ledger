@@ -1372,7 +1372,7 @@ function attachPanelEvents(){
       if(!canEdit()) return;
       const type = b.dataset.type;
       const id = b.dataset.id;
-      const input = panel.querySelector(`.step-input[data-type="${type}"][data-id="${id}"]`);
+      const input = b.closest('.step-add-row').querySelector('.step-input');
       if(!input) return;
       const text = input.value.trim();
       if(!text) return;
@@ -1388,9 +1388,7 @@ function attachPanelEvents(){
     input.addEventListener('keydown', (e)=>{
       if(e.key==='Enter'){
         e.preventDefault();
-        const type = input.dataset.type;
-        const id = input.dataset.id;
-        const btn = panel.querySelector(`.step-add-btn[data-type="${type}"][data-id="${id}"]`);
+        const btn = input.closest('.step-add-row').querySelector('.step-add-btn');
         if(btn) btn.click();
       }
     });
